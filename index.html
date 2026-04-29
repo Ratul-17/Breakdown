@@ -1,1071 +1,341 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Breakdown Dashboard — AKIJ Resource</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<style>
-  :root {
-    --bg: #f5f6fa;
-    --card: #ffffff;
-    --border: #e2e6ef;
-    --primary: #1a56db;
-    --primary-light: #e8f0fe;
-    --accent: #f59e0b;
-    --danger: #ef4444;
-    --success: #10b981;
-    --text: #111827;
-    --muted: #6b7280;
-    --sidebar: #1e293b;
-    --sidebar-text: #94a3b8;
-    --sidebar-active: #ffffff;
-    --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.04);
-    --radius: 12px;
-    --font: 'Segoe UI', system-ui, sans-serif;
-  }
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell 
+} from 'recharts';
+import { 
+  Filter, Calendar, Settings, Activity, Clock, AlertTriangle, LayoutDashboard, Menu, X, ChevronRight
+} from 'lucide-react';
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+// --- CONFIGURATION ---
+// Replace this with your deployed Google Apps Script Web App URL
+const API_URL = "https://script.google.com/macros/s/AKfycbzfs4z6RYX26T0q74k4_4H9RkTMF3cvD_4brgz-Jb2m4zuOyHUgP1i7ICBs9PFY0eGK/exec";
 
-  body {
-    font-family: var(--font);
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
-  /* TOP NAV */
-  .topbar {
-    background: var(--sidebar);
-    color: #fff;
-    padding: 0 20px;
-    height: 56px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-  }
-  .topbar-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-weight: 700;
-    font-size: 15px;
-    letter-spacing: 0.3px;
-  }
-  .topbar-brand .dot {
-    width: 28px; height: 28px;
-    background: var(--primary);
-    border-radius: 8px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 14px; font-weight: 800; color: #fff;
-  }
-  .topbar-right {
-    display: flex; align-items: center; gap: 10px;
-  }
-  .last-updated {
-    font-size: 11px;
-    color: var(--sidebar-text);
-    background: rgba(255,255,255,0.07);
-    padding: 4px 10px;
-    border-radius: 20px;
-  }
-  .refresh-btn {
-    background: var(--primary);
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    padding: 6px 14px;
-    font-size: 13px;
-    cursor: pointer;
-    font-weight: 600;
-    display: flex; align-items: center; gap: 6px;
-    transition: background 0.2s;
-  }
-  .refresh-btn:hover { background: #1742b0; }
+const App = () => {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
 
-  /* MAIN LAYOUT */
-  .main { flex: 1; padding: 20px; max-width: 1400px; margin: 0 auto; width: 100%; }
-
-  /* FILTERS */
-  .filter-card {
-    background: var(--card);
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
-    padding: 16px 20px;
-    margin-bottom: 20px;
-    box-shadow: var(--shadow);
-  }
-  .filter-card h3 {
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: var(--muted);
-    margin-bottom: 14px;
-  }
-  .filter-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 12px;
-    align-items: end;
-  }
-  .filter-group label {
-    display: block;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 5px;
-  }
-  .filter-group select,
-  .filter-group input[type="date"] {
-    width: 100%;
-    padding: 8px 10px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    font-size: 13px;
-    background: var(--bg);
-    color: var(--text);
-    outline: none;
-    transition: border-color 0.2s;
-    -webkit-appearance: none;
-  }
-  .filter-group select:focus,
-  .filter-group input:focus { border-color: var(--primary); }
-
-  .filter-actions {
-    display: flex;
-    gap: 8px;
-    align-items: flex-end;
-    flex-wrap: wrap;
-  }
-  .btn-primary {
-    background: var(--primary);
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    padding: 8px 18px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-  .btn-primary:hover { background: #1742b0; }
-  .btn-secondary {
-    background: var(--bg);
-    color: var(--muted);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 8px 14px;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  .btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
-
-  /* KPI CARDS */
-  .kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-    gap: 14px;
-    margin-bottom: 20px;
-  }
-  .kpi-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 18px 16px;
-    box-shadow: var(--shadow);
-    position: relative;
-    overflow: hidden;
-    transition: transform 0.15s;
-  }
-  .kpi-card:hover { transform: translateY(-2px); }
-  .kpi-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: var(--kpi-color, var(--primary));
-    border-radius: var(--radius) var(--radius) 0 0;
-  }
-  .kpi-label {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: var(--muted);
-    margin-bottom: 8px;
-  }
-  .kpi-value {
-    font-size: 28px;
-    font-weight: 800;
-    color: var(--kpi-color, var(--primary));
-    line-height: 1;
-    margin-bottom: 4px;
-  }
-  .kpi-sub {
-    font-size: 11px;
-    color: var(--muted);
-  }
-
-  /* CHARTS GRID */
-  .charts-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 20px;
-  }
-  @media (max-width: 900px) {
-    .charts-grid { grid-template-columns: 1fr; }
-  }
-  .chart-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 18px;
-    box-shadow: var(--shadow);
-  }
-  .chart-card.wide {
-    grid-column: 1 / -1;
-  }
-  .chart-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 14px;
-  }
-  .chart-title {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text);
-    letter-spacing: 0.2px;
-  }
-  .chart-badge {
-    font-size: 10px;
-    font-weight: 700;
-    background: var(--primary-light);
-    color: var(--primary);
-    padding: 2px 8px;
-    border-radius: 20px;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-  }
-  .chart-container { position: relative; }
-
-  /* TABLE */
-  .table-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 18px;
-    box-shadow: var(--shadow);
-    margin-bottom: 20px;
-    overflow-x: auto;
-  }
-  .table-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 14px;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  .search-box {
-    padding: 7px 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    font-size: 12px;
-    background: var(--bg);
-    color: var(--text);
-    outline: none;
-    width: 200px;
-  }
-  .search-box:focus { border-color: var(--primary); }
-
-  table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 600px; }
-  thead th {
-    text-align: left;
-    padding: 9px 12px;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--muted);
-    border-bottom: 1px solid var(--border);
-    background: var(--bg);
-    cursor: pointer;
-    user-select: none;
-    white-space: nowrap;
-  }
-  thead th:hover { color: var(--primary); }
-  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
-  tbody tr:hover { background: var(--primary-light); }
-  tbody td { padding: 9px 12px; color: var(--text); }
-  .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-  .badge-blue { background: #dbeafe; color: #1d4ed8; }
-  .badge-green { background: #d1fae5; color: #065f46; }
-  .badge-amber { background: #fef3c7; color: #92400e; }
-  .badge-red { background: #fee2e2; color: #991b1b; }
-  .badge-purple { background: #ede9fe; color: #5b21b6; }
-
-  /* LOADING / ERROR */
-  .loading-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(255,255,255,0.85);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 999;
-    gap: 16px;
-  }
-  .spinner {
-    width: 44px; height: 44px;
-    border: 4px solid var(--border);
-    border-top-color: var(--primary);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-text { font-size: 14px; color: var(--muted); font-weight: 500; }
-
-  .error-banner {
-    background: #fee2e2;
-    color: #991b1b;
-    border: 1px solid #fca5a5;
-    border-radius: 10px;
-    padding: 14px 18px;
-    font-size: 13px;
-    margin-bottom: 16px;
-    display: none;
-  }
-
-  /* PAGINATION */
-  .pagination {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 6px;
-    margin-top: 12px;
-    flex-wrap: wrap;
-  }
-  .page-info { font-size: 12px; color: var(--muted); margin-right: 6px; }
-  .page-btn {
-    padding: 5px 10px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--card);
-    font-size: 12px;
-    cursor: pointer;
-    color: var(--text);
-    transition: all 0.15s;
-  }
-  .page-btn:hover, .page-btn.active {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary);
-  }
-  .page-btn:disabled { opacity: 0.4; cursor: default; }
-
-  /* EMPTY STATE */
-  .empty-state {
-    text-align: center;
-    padding: 40px;
-    color: var(--muted);
-    font-size: 13px;
-  }
-
-  /* CONFIG PANEL */
-  .config-panel {
-    background: #fffbeb;
-    border: 1px solid #fcd34d;
-    border-radius: var(--radius);
-    padding: 16px 20px;
-    margin-bottom: 20px;
-    font-size: 13px;
-  }
-  .config-panel strong { color: #92400e; }
-  .api-input-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-  .api-input {
-    flex: 1;
-    min-width: 200px;
-    padding: 8px 12px;
-    border: 1px solid #fcd34d;
-    border-radius: 8px;
-    font-size: 12px;
-    font-family: monospace;
-    background: #fff;
-    outline: none;
-  }
-  .api-input:focus { border-color: var(--primary); }
-
-  /* RESPONSIVE */
-  @media (max-width: 600px) {
-    .main { padding: 12px; }
-    .filter-grid { grid-template-columns: 1fr 1fr; }
-    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-    .kpi-value { font-size: 22px; }
-    .topbar-brand span:last-child { display: none; }
-    .search-box { width: 100%; }
-  }
-</style>
-</head>
-<body>
-
-<!-- TOP NAV -->
-<div class="topbar">
-  <div class="topbar-brand">
-    <div class="dot">B</div>
-    <span>Breakdown Dashboard</span>
-    <span style="color:var(--sidebar-text);font-weight:400;font-size:13px">— AKIJ Resource</span>
-  </div>
-  <div class="topbar-right">
-    <span class="last-updated" id="last-updated">Not loaded</span>
-    <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
-  </div>
-</div>
-
-<div class="main">
-
-  <!-- CONFIG PANEL -->
-  <div class="config-panel" id="config-panel">
-    <strong>⚙ Setup Required:</strong> Paste your Google Apps Script Web App URL below, then click Connect.
-    <div class="api-input-row">
-      <input class="api-input" id="api-url-input" placeholder="https://script.google.com/macros/s/.../exec" />
-      <button class="btn-primary" onclick="saveApiUrl()">Connect</button>
-    </div>
-    <div style="margin-top:8px;font-size:11px;color:#92400e">
-      Deploy your Apps Script as a Web App (Execute as: Me, Access: Anyone) and paste the URL above.
-    </div>
-  </div>
-
-  <div id="error-banner" class="error-banner"></div>
-
-  <!-- FILTERS -->
-  <div class="filter-card">
-    <h3>🔍 Filters</h3>
-    <div class="filter-grid">
-      <div class="filter-group">
-        <label>From Date</label>
-        <input type="date" id="f-from" />
-      </div>
-      <div class="filter-group">
-        <label>To Date</label>
-        <input type="date" id="f-to" />
-      </div>
-      <div class="filter-group">
-        <label>SBU</label>
-        <select id="f-sbu"><option value="">All SBUs</option></select>
-      </div>
-      <div class="filter-group">
-        <label>Section</label>
-        <select id="f-section"><option value="">All Sections</option></select>
-      </div>
-      <div class="filter-group">
-        <label>Breakdown Type</label>
-        <select id="f-type"><option value="">All Types</option></select>
-      </div>
-      <div class="filter-actions">
-        <button class="btn-primary" onclick="applyFilters()">Apply</button>
-        <button class="btn-secondary" onclick="resetFilters()">Reset</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- KPI CARDS -->
-  <div class="kpi-grid" id="kpi-grid">
-    <div class="kpi-card" style="--kpi-color:#1a56db">
-      <div class="kpi-label">Total Breakdowns</div>
-      <div class="kpi-value" id="kpi-total">—</div>
-      <div class="kpi-sub">In filtered range</div>
-    </div>
-    <div class="kpi-card" style="--kpi-color:#10b981">
-      <div class="kpi-label">Unique Machines</div>
-      <div class="kpi-value" id="kpi-machines">—</div>
-      <div class="kpi-sub">Distinct machines</div>
-    </div>
-    <div class="kpi-card" style="--kpi-color:#f59e0b">
-      <div class="kpi-label">SBUs Affected</div>
-      <div class="kpi-value" id="kpi-sbus">—</div>
-      <div class="kpi-sub">Distinct SBUs</div>
-    </div>
-    <div class="kpi-card" style="--kpi-color:#ef4444">
-      <div class="kpi-label">Most Frequent</div>
-      <div class="kpi-value" id="kpi-top" style="font-size:14px;padding-top:6px">—</div>
-      <div class="kpi-sub">Top breakdown type</div>
-    </div>
-    <div class="kpi-card" style="--kpi-color:#8b5cf6">
-      <div class="kpi-label">Last Occurred</div>
-      <div class="kpi-value" id="kpi-last" style="font-size:14px;padding-top:6px">—</div>
-      <div class="kpi-sub">Most recent breakdown</div>
-    </div>
-  </div>
-
-  <!-- CHARTS ROW 1 -->
-  <div class="charts-grid">
-    <div class="chart-card wide">
-      <div class="chart-header">
-        <span class="chart-title">Monthly Breakdown Trend</span>
-        <span class="chart-badge">Trend</span>
-      </div>
-      <div class="chart-container" style="height:220px">
-        <canvas id="chart-trend"></canvas>
-      </div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-header">
-        <span class="chart-title">Breakdowns by SBU</span>
-        <span class="chart-badge">Bar</span>
-      </div>
-      <div class="chart-container" style="height:240px">
-        <canvas id="chart-sbu"></canvas>
-      </div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-header">
-        <span class="chart-title">Breakdown Type Distribution</span>
-        <span class="chart-badge">Donut</span>
-      </div>
-      <div class="chart-container" style="height:240px">
-        <canvas id="chart-type"></canvas>
-      </div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-header">
-        <span class="chart-title">Top 10 Sections</span>
-        <span class="chart-badge">Bar</span>
-      </div>
-      <div class="chart-container" style="height:240px">
-        <canvas id="chart-section"></canvas>
-      </div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-header">
-        <span class="chart-title">Monthly by SBU</span>
-        <span class="chart-badge">Stacked</span>
-      </div>
-      <div class="chart-container" style="height:240px">
-        <canvas id="chart-monthly-sbu"></canvas>
-      </div>
-    </div>
-  </div>
-
-  <!-- TOP BREAKDOWNS TABLE -->
-  <div class="table-card">
-    <div class="table-header">
-      <span class="chart-title">Top Breakdowns — Frequency & Last Occurred</span>
-      <input class="search-box" id="table-search" placeholder="Search..." oninput="renderTable()" />
-    </div>
-    <div style="overflow-x:auto">
-      <table id="breakdown-table">
-        <thead>
-          <tr>
-            <th onclick="sortTable('rank')">#</th>
-            <th onclick="sortTable('type')">Breakdown Type ↕</th>
-            <th onclick="sortTable('section')">Section ↕</th>
-            <th onclick="sortTable('sbu')">SBU ↕</th>
-            <th onclick="sortTable('freq')">Frequency ↕</th>
-            <th onclick="sortTable('last')">Last Occurred ↕</th>
-          </tr>
-        </thead>
-        <tbody id="table-body"></tbody>
-      </table>
-    </div>
-    <div class="pagination" id="pagination"></div>
-  </div>
-
-</div>
-
-<!-- LOADING -->
-<div class="loading-overlay" id="loading" style="display:none">
-  <div class="spinner"></div>
-  <div class="loading-text">Loading breakdown data...</div>
-</div>
-
-<script>
-// ─── CONFIG ────────────────────────────────────────────────────
-const LS_KEY_URL = 'akij_bd_api_url';
-let API_URL = localStorage.getItem(LS_KEY_URL) || '';
-let RAW_DATA = [];
-let FILTERED = [];
-let HEADERS = [];
-let charts = {};
-let sortKey = 'freq', sortDir = -1;
-let currentPage = 1;
-const PAGE_SIZE = 15;
-
-// Column name mapping — update if your actual header names differ
-const COL = {
-  date: null,
-  sbu: null,
-  section: null,
-  type: null,
-  machine: null,
-  // add more if needed
-};
-
-// ─── INIT ──────────────────────────────────────────────────────
-window.onload = () => {
-  if (API_URL) {
-    document.getElementById('config-panel').style.display = 'none';
-    document.getElementById('api-url-input').value = API_URL;
-    loadData();
-  } else {
-    document.getElementById('api-url-input').value = API_URL;
-  }
-};
-
-function saveApiUrl() {
-  const v = document.getElementById('api-url-input').value.trim();
-  if (!v) return alert('Please enter your Apps Script URL.');
-  API_URL = v;
-  localStorage.setItem(LS_KEY_URL, v);
-  document.getElementById('config-panel').style.display = 'none';
-  loadData();
-}
-
-// ─── DATA LOADING ──────────────────────────────────────────────
-async function loadData() {
-  if (!API_URL) {
-    document.getElementById('config-panel').style.display = '';
-    return;
-  }
-  showLoading(true);
-  hideError();
-  try {
-    // Use a CORS proxy approach via no-cors workaround or direct fetch
-    const url = API_URL + (API_URL.includes('?') ? '&' : '?') + 'ts=' + Date.now();
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const json = await res.json();
-    HEADERS = json.headers || [];
-    RAW_DATA = (json.data || []).map(row => normalizeRow(row));
-    detectColumns();
-    populateFilters();
-    applyFilters();
-    document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
-  } catch(e) {
-    showError('Failed to load data: ' + e.message + '. Check your API URL and CORS settings.');
-  } finally {
-    showLoading(false);
-  }
-}
-
-function normalizeRow(row) {
-  // Normalize date fields
-  const out = {...row};
-  for (const k of Object.keys(out)) {
-    if (out[k] instanceof Date) {
-      out[k] = out[k].toISOString().slice(0,10);
-    } else if (typeof out[k] === 'string' && out[k].match(/^\d{4}-\d{2}-\d{2}/)) {
-      out[k] = out[k].slice(0,10);
-    }
-    // Handle Google Sheets serial dates
-    if (typeof out[k] === 'number' && out[k] > 40000 && out[k] < 60000) {
-      const d = new Date((out[k] - 25569) * 86400000);
-      out[k] = d.toISOString().slice(0,10);
-    }
-  }
-  return out;
-}
-
-function detectColumns() {
-  // Auto-detect column names (case-insensitive, fuzzy)
-  const H = HEADERS.map(h => String(h).toLowerCase().trim());
-  const find = (patterns) => {
-    for (const p of patterns) {
-      const i = H.findIndex(h => h.includes(p));
-      if (i >= 0) return HEADERS[i];
-    }
-    return null;
-  };
-  COL.date    = find(['date','dt','time','occurred','day']);
-  COL.sbu     = find(['sbu','business unit','unit','bu','plant','factory']);
-  COL.section = find(['section','dept','department','area','line','zone']);
-  COL.type    = find(['breakdown type','type','category','cause','failure','fault','reason']);
-  COL.machine = find(['machine','equipment','asset','device','m/c','mac']);
-  console.log('Detected columns:', COL);
-}
-
-// ─── FILTERS ──────────────────────────────────────────────────
-function getUnique(key) {
-  if (!key) return [];
-  return [...new Set(RAW_DATA.map(r => r[key]).filter(v => v && String(v).trim()))].sort();
-}
-
-function populateFilters() {
-  populateSelect('f-sbu', getUnique(COL.sbu));
-  populateSelect('f-section', getUnique(COL.section));
-  populateSelect('f-type', getUnique(COL.type));
-  // Set default date range
-  if (COL.date) {
-    const dates = RAW_DATA.map(r => r[COL.date]).filter(Boolean).sort();
-    if (dates.length) {
-      document.getElementById('f-from').value = dates[0];
-      document.getElementById('f-to').value = dates[dates.length - 1];
-    }
-  }
-}
-
-function populateSelect(id, values) {
-  const sel = document.getElementById(id);
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">All</option>';
-  values.forEach(v => {
-    const opt = document.createElement('option');
-    opt.value = v; opt.textContent = v;
-    if (v === cur) opt.selected = true;
-    sel.appendChild(opt);
-  });
-}
-
-function applyFilters() {
-  const from = document.getElementById('f-from').value;
-  const to   = document.getElementById('f-to').value;
-  const sbu  = document.getElementById('f-sbu').value;
-  const sec  = document.getElementById('f-section').value;
-  const typ  = document.getElementById('f-type').value;
-
-  FILTERED = RAW_DATA.filter(row => {
-    if (COL.date) {
-      const d = row[COL.date];
-      if (from && d < from) return false;
-      if (to   && d > to)   return false;
-    }
-    if (sbu && COL.sbu     && row[COL.sbu]     !== sbu) return false;
-    if (sec && COL.section && row[COL.section] !== sec) return false;
-    if (typ && COL.type    && row[COL.type]    !== typ) return false;
-    return true;
+  // Filters
+  const [filters, setFilters] = useState({
+    dateFrom: '',
+    dateTo: '',
+    sbu: 'All',
+    section: 'All',
+    type: 'All'
   });
 
-  updateKPIs();
-  updateCharts();
-  currentPage = 1;
-  renderTable();
-}
-
-function resetFilters() {
-  document.getElementById('f-sbu').value = '';
-  document.getElementById('f-section').value = '';
-  document.getElementById('f-type').value = '';
-  if (COL.date) {
-    const dates = RAW_DATA.map(r => r[COL.date]).filter(Boolean).sort();
-    if (dates.length) {
-      document.getElementById('f-from').value = dates[0];
-      document.getElementById('f-to').value = dates[dates.length - 1];
-    }
-  }
-  applyFilters();
-}
-
-// ─── KPI ──────────────────────────────────────────────────────
-function updateKPIs() {
-  const total = FILTERED.length;
-  document.getElementById('kpi-total').textContent = total.toLocaleString();
-
-  const machines = COL.machine
-    ? new Set(FILTERED.map(r => r[COL.machine]).filter(Boolean)).size
-    : '—';
-  document.getElementById('kpi-machines').textContent = machines;
-
-  const sbus = COL.sbu
-    ? new Set(FILTERED.map(r => r[COL.sbu]).filter(Boolean)).size
-    : '—';
-  document.getElementById('kpi-sbus').textContent = sbus;
-
-  if (COL.type) {
-    const freq = countBy(FILTERED, COL.type);
-    const top = Object.entries(freq).sort((a,b) => b[1]-a[1])[0];
-    document.getElementById('kpi-top').textContent = top ? `${top[0]} (${top[1]})` : '—';
-  }
-
-  if (COL.date) {
-    const dates = FILTERED.map(r => r[COL.date]).filter(Boolean).sort();
-    document.getElementById('kpi-last').textContent = dates.length ? dates[dates.length - 1] : '—';
-  }
-}
-
-// ─── CHARTS ───────────────────────────────────────────────────
-const PALETTE = [
-  '#1a56db','#10b981','#f59e0b','#ef4444','#8b5cf6',
-  '#06b6d4','#ec4899','#84cc16','#f97316','#6366f1'
-];
-
-function countBy(data, key) {
-  return data.reduce((acc, row) => {
-    const v = String(row[key] || 'Unknown').trim();
-    acc[v] = (acc[v] || 0) + 1;
-    return acc;
-  }, {});
-}
-
-function destroyChart(id) {
-  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
-}
-
-function updateCharts() {
-  updateTrendChart();
-  updateSBUChart();
-  updateTypeChart();
-  updateSectionChart();
-  updateMonthlySBUChart();
-}
-
-function updateTrendChart() {
-  destroyChart('trend');
-  if (!COL.date) return;
-  const monthly = {};
-  FILTERED.forEach(r => {
-    const m = r[COL.date] ? r[COL.date].slice(0,7) : null;
-    if (m) monthly[m] = (monthly[m] || 0) + 1;
-  });
-  const labels = Object.keys(monthly).sort();
-  const vals = labels.map(l => monthly[l]);
-  const ctx = document.getElementById('chart-trend').getContext('2d');
-  charts['trend'] = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: labels.map(l => {
-        const [y,m] = l.split('-');
-        return new Date(y,m-1).toLocaleString('default',{month:'short',year:'2-digit'});
-      }),
-      datasets: [{
-        label: 'Breakdowns',
-        data: vals,
-        borderColor: '#1a56db',
-        backgroundColor: 'rgba(26,86,219,0.08)',
-        tension: 0.4,
-        fill: true,
-        pointBackgroundColor: '#1a56db',
-        pointRadius: 4,
-      }]
-    },
-    options: chartOpts('trend', false)
-  });
-}
-
-function updateSBUChart() {
-  destroyChart('sbu');
-  if (!COL.sbu) return;
-  const freq = countBy(FILTERED, COL.sbu);
-  const sorted = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  const ctx = document.getElementById('chart-sbu').getContext('2d');
-  charts['sbu'] = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: sorted.map(x=>x[0]),
-      datasets: [{ data: sorted.map(x=>x[1]), backgroundColor: PALETTE, borderRadius: 5 }]
-    },
-    options: { ...chartOpts('sbu', false), plugins: { legend: { display: false } } }
-  });
-}
-
-function updateTypeChart() {
-  destroyChart('type');
-  if (!COL.type) return;
-  const freq = countBy(FILTERED, COL.type);
-  const sorted = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  const ctx = document.getElementById('chart-type').getContext('2d');
-  charts['type'] = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: sorted.map(x=>x[0]),
-      datasets: [{ data: sorted.map(x=>x[1]), backgroundColor: PALETTE, borderWidth: 2, borderColor: '#fff' }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12 } },
-        tooltip: { callbacks: { label: (ctx) => ` ${ctx.label}: ${ctx.parsed} (${Math.round(ctx.parsed/FILTERED.length*100)}%)` } }
+  // Fetch Data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // For demo purposes, if API_URL is not set, we use the sample data provided in the prompt
+        // In production, fetch(API_URL)
+        const response = await fetch(API_URL);
+        const json = await response.json();
+        
+        // Parse dates correctly
+        const formatted = json.map(item => ({
+          ...item,
+          dateObj: new Date(item.date),
+          npt: parseFloat(item.npt) || 0
+        }));
+        setData(formatted);
+        setLoading(false);
+      } catch (err) {
+        console.error("Fetch error:", err);
+        setError("Please deploy the Apps Script and update the API_URL in the code.");
+        setLoading(false);
       }
-    }
-  });
-}
+    };
 
-function updateSectionChart() {
-  destroyChart('section');
-  if (!COL.section) return;
-  const freq = countBy(FILTERED, COL.section);
-  const sorted = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  const ctx = document.getElementById('chart-section').getContext('2d');
-  charts['section'] = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: sorted.map(x=>x[0]),
-      datasets: [{ data: sorted.map(x=>x[1]), backgroundColor: '#10b981', borderRadius: 5 }]
-    },
-    options: {
-      ...chartOpts('section', false),
-      indexAxis: 'y',
-      plugins: { legend: { display: false } }
-    }
-  });
-}
+    fetchData();
+  }, []);
 
-function updateMonthlySBUChart() {
-  destroyChart('monthly-sbu');
-  if (!COL.date || !COL.sbu) return;
-  const months = [...new Set(FILTERED.map(r => r[COL.date]?.slice(0,7)).filter(Boolean))].sort();
-  const sbus = [...new Set(FILTERED.map(r => r[COL.sbu]).filter(Boolean))].slice(0,6);
-  const datasets = sbus.map((s, i) => ({
-    label: s,
-    data: months.map(m => FILTERED.filter(r => r[COL.date]?.startsWith(m) && r[COL.sbu] === s).length),
-    backgroundColor: PALETTE[i],
-    borderRadius: 3
-  }));
-  const ctx = document.getElementById('chart-monthly-sbu').getContext('2d');
-  charts['monthly-sbu'] = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: months.map(l => {
-        const [y,m] = l.split('-');
-        return new Date(y,m-1).toLocaleString('default',{month:'short',year:'2-digit'});
-      }),
-      datasets
-    },
-    options: { ...chartOpts('monthly-sbu', true), plugins: { legend: { labels: { font: { size: 10 }, boxWidth: 10 } } } }
-  });
-}
+  // Filter Logic
+  const filteredData = useMemo(() => {
+    return data.filter(item => {
+      const dateMatch = (!filters.dateFrom || item.dateObj >= new Date(filters.dateFrom)) &&
+                        (!filters.dateTo || item.dateObj <= new Date(filters.dateTo));
+      const sbuMatch = filters.sbu === 'All' || item.sbu === filters.sbu;
+      const sectionMatch = filters.section === 'All' || item.section === filters.section;
+      const typeMatch = filters.type === 'All' || item.type === filters.type;
+      return dateMatch && sbuMatch && sectionMatch && typeMatch;
+    });
+  }, [data, filters]);
 
-function chartOpts(id, stacked) {
-  return {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
-    scales: {
-      x: { stacked, grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 45 } },
-      y: { stacked, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 10 } }, beginAtZero: true }
-    }
-  };
-}
+  // Analytics Derived State
+  const stats = useMemo(() => {
+    const totalNpt = filteredData.reduce((acc, curr) => acc + curr.npt, 0);
+    const count = filteredData.length;
+    
+    // Monthly Trend
+    const monthlyMap = {};
+    filteredData.forEach(d => {
+      const month = d.dateObj.toLocaleString('default', { month: 'short', year: '2-digit' });
+      monthlyMap[month] = (monthlyMap[month] || 0) + d.npt;
+    });
+    const trendData = Object.entries(monthlyMap).map(([name, value]) => ({ name, value }));
 
-// ─── TABLE ─────────────────────────────────────────────────────
-let tableData = [];
+    // Top Breakdowns
+    const typeMap = {};
+    filteredData.forEach(d => {
+      typeMap[d.type] = (typeMap[d.type] || 0) + 1;
+    });
+    const typeData = Object.entries(typeMap)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
 
-function buildTableData() {
-  if (!COL.type) return [];
-  // Aggregate by type + section + SBU
-  const map = {};
-  FILTERED.forEach(row => {
-    const key = [row[COL.type]||'Unknown', row[COL.section]||'', row[COL.sbu]||''].join('||');
-    if (!map[key]) {
-      map[key] = {
-        type: row[COL.type] || 'Unknown',
-        section: row[COL.section] || '—',
-        sbu: row[COL.sbu] || '—',
-        freq: 0,
-        last: ''
-      };
-    }
-    map[key].freq++;
-    const d = row[COL.date];
-    if (d && d > map[key].last) map[key].last = d;
-  });
-  return Object.values(map);
-}
+    // Last Occurrences
+    const lastDates = {};
+    filteredData.forEach(d => {
+      if (!lastDates[d.name] || d.dateObj > lastDates[d.name].date) {
+        lastDates[d.name] = { date: d.dateObj, name: d.name, type: d.type };
+      }
+    });
+    const recentBreakdowns = Object.values(lastDates)
+      .sort((a, b) => b.date - a.date)
+      .slice(0, 5);
 
-function sortTable(key) {
-  if (sortKey === key) sortDir *= -1;
-  else { sortKey = key; sortDir = -1; }
-  currentPage = 1;
-  renderTable();
-}
+    return { totalNpt, count, trendData, typeData, recentBreakdowns };
+  }, [filteredData]);
 
-function renderTable() {
-  tableData = buildTableData();
-  const q = document.getElementById('table-search').value.toLowerCase();
-  let rows = tableData.filter(r =>
-    !q ||
-    r.type.toLowerCase().includes(q) ||
-    r.section.toLowerCase().includes(q) ||
-    r.sbu.toLowerCase().includes(q)
+  const uniqueValues = (key) => ['All', ...new Set(data.map(item => item[key]))];
+
+  if (loading) return (
+    <div className="flex h-screen items-center justify-center bg-gray-50">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+    </div>
   );
 
-  const keyMap = { rank:'freq', type:'type', section:'section', sbu:'sbu', freq:'freq', last:'last' };
-  rows.sort((a,b) => {
-    const k = keyMap[sortKey] || 'freq';
-    const va = a[k], vb = b[k];
-    if (typeof va === 'number') return sortDir * (va - vb);
-    return sortDir * String(va).localeCompare(String(vb));
-  });
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row font-sans text-gray-900">
+      
+      {/* Sidebar / Filters (Mobile Drawer) */}
+      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-xl transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static transition-transform duration-300 ease-in-out border-r border-gray-100`}>
+        <div className="p-6">
+          <div className="flex items-center gap-2 mb-8">
+            <div className="bg-blue-600 p-2 rounded-lg">
+              <Activity className="text-white w-5 h-5" />
+            </div>
+            <h1 className="text-xl font-bold tracking-tight">NPT Analytics</h1>
+          </div>
 
-  const total = rows.length;
-  const pages = Math.ceil(total / PAGE_SIZE);
-  const start = (currentPage - 1) * PAGE_SIZE;
-  const pageRows = rows.slice(start, start + PAGE_SIZE);
+          <div className="space-y-6">
+            <div>
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">SBU</label>
+              <select 
+                className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={filters.sbu}
+                onChange={(e) => setFilters({...filters, sbu: e.target.value})}
+              >
+                {uniqueValues('sbu').map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
 
-  const COLORS = ['badge-red','badge-amber','badge-blue','badge-green','badge-purple'];
-  const tbody = document.getElementById('table-body');
-  if (!pageRows.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No data found for current filters.</td></tr>';
-  } else {
-    tbody.innerHTML = pageRows.map((r, i) => `
-      <tr>
-        <td style="font-weight:700;color:var(--muted)">${start + i + 1}</td>
-        <td><span class="badge ${COLORS[(start+i)%COLORS.length]}">${r.type}</span></td>
-        <td>${r.section}</td>
-        <td>${r.sbu}</td>
-        <td style="font-weight:700;color:var(--primary)">${r.freq}</td>
-        <td>${r.last || '—'}</td>
-      </tr>`).join('');
-  }
+            <div>
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">Section</label>
+              <select 
+                className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={filters.section}
+                onChange={(e) => setFilters({...filters, section: e.target.value})}
+              >
+                {uniqueValues('section').map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
 
-  // Pagination
-  const pag = document.getElementById('pagination');
-  pag.innerHTML = '';
-  if (total > 0) {
-    const info = document.createElement('span');
-    info.className = 'page-info';
-    info.textContent = `${start+1}–${Math.min(start+PAGE_SIZE, total)} of ${total}`;
-    pag.appendChild(info);
-    const prevBtn = document.createElement('button');
-    prevBtn.className = 'page-btn';
-    prevBtn.textContent = '‹';
-    prevBtn.disabled = currentPage === 1;
-    prevBtn.onclick = () => { currentPage--; renderTable(); };
-    pag.appendChild(prevBtn);
+            <div>
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">Breakdown Type</label>
+              <select 
+                className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={filters.type}
+                onChange={(e) => setFilters({...filters, type: e.target.value})}
+              >
+                {uniqueValues('type').map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
 
-    const maxPages = Math.min(pages, 7);
-    for (let p = 1; p <= maxPages; p++) {
-      const btn = document.createElement('button');
-      btn.className = 'page-btn' + (p === currentPage ? ' active' : '');
-      btn.textContent = p;
-      btn.onclick = (pp => () => { currentPage = pp; renderTable(); })(p);
-      pag.appendChild(btn);
-    }
+            <div className="pt-4 border-t border-gray-100">
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">Date Range</label>
+              <input 
+                type="date" 
+                className="w-full mb-2 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                onChange={(e) => setFilters({...filters, dateFrom: e.target.value})}
+              />
+              <input 
+                type="date" 
+                className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                onChange={(e) => setFilters({...filters, dateTo: e.target.value})}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
-    const nextBtn = document.createElement('button');
-    nextBtn.className = 'page-btn';
-    nextBtn.textContent = '›';
-    nextBtn.disabled = currentPage >= pages;
-    nextBtn.onclick = () => { currentPage++; renderTable(); };
-    pag.appendChild(nextBtn);
-  }
-}
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-100 p-4 sticky top-0 z-30 flex items-center justify-between">
+          <button className="md:hidden p-2 hover:bg-gray-100 rounded-lg" onClick={() => setSidebarOpen(!isSidebarOpen)}>
+            {isSidebarOpen ? <X /> : <Menu />}
+          </button>
+          <div className="flex items-center gap-4">
+             <div className="hidden sm:block">
+                <p className="text-sm text-gray-500">Overview</p>
+                <h2 className="font-semibold capitalize">{filters.section} Performance</h2>
+             </div>
+          </div>
+          <div className="flex items-center gap-2 text-sm font-medium bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full">
+            <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+            Live Data
+          </div>
+        </header>
 
-// ─── UTILS ────────────────────────────────────────────────────
-function showLoading(v) { document.getElementById('loading').style.display = v ? 'flex' : 'none'; }
-function showError(msg) {
-  const el = document.getElementById('error-banner');
-  el.textContent = msg;
-  el.style.display = 'block';
-}
-function hideError() { document.getElementById('error-banner').style.display = 'none'; }
-</script>
-</body>
-</html>
+        <main className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
+          {error && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-semibold">Setup Required</p>
+                <p className="text-sm opacity-90">{error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Key Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
+                  <Clock className="w-6 h-6" />
+                </div>
+              </div>
+              <p className="text-gray-500 text-sm font-medium">Total NPT Time</p>
+              <h3 className="text-3xl font-bold mt-1">{stats.totalNpt.toLocaleString()} <span className="text-sm font-normal text-gray-400">min</span></h3>
+            </div>
+            
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-red-50 rounded-xl text-red-600">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+              </div>
+              <p className="text-gray-500 text-sm font-medium">Breakdown Frequency</p>
+              <h3 className="text-3xl font-bold mt-1">{stats.count} <span className="text-sm font-normal text-gray-400">events</span></h3>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow sm:col-span-2 lg:col-span-1">
+               <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
+                  <Settings className="w-6 h-6" />
+                </div>
+              </div>
+              <p className="text-gray-500 text-sm font-medium">Avg. Time / Event</p>
+              <h3 className="text-3xl font-bold mt-1">
+                {stats.count ? (stats.totalNpt / stats.count).toFixed(1) : 0} 
+                <span className="text-sm font-normal text-gray-400"> min</span>
+              </h3>
+            </div>
+          </div>
+
+          {/* Charts Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Trend Chart */}
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                <LayoutDashboard className="w-5 h-5 text-gray-400" />
+                Monthly NPT Trend
+              </h3>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={stats.trendData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12}} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12}} />
+                    <Tooltip 
+                      contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                    />
+                    <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={3} dot={{r: 4, fill: '#3b82f6'}} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Breakdown Types */}
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                <Filter className="w-5 h-5 text-gray-400" />
+                Top Breakdown Types
+              </h3>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.typeData} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" width={120} axisLine={false} tickLine={false} tick={{fontSize: 11}} />
+                    <Tooltip cursor={{fill: '#f8fafc'}} />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                      {stats.typeData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent & Summary Table */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-50 flex justify-between items-center">
+              <h3 className="text-lg font-bold">Latest Occurrences</h3>
+              <button className="text-blue-600 text-sm font-medium flex items-center hover:underline">
+                View All <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-gray-50 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-4">Breakdown Name</th>
+                    <th className="px-6 py-4">Category</th>
+                    <th className="px-6 py-4">Last Date</th>
+                    <th className="px-6 py-4 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {stats.recentBreakdowns.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50 transition-colors group">
+                      <td className="px-6 py-4 font-medium text-gray-700">{item.name}</td>
+                      <td className="px-6 py-4">
+                        <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">
+                          {item.type}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-gray-500 text-sm">{item.date.toLocaleDateString()}</td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="inline-flex items-center gap-1.5 text-xs text-amber-600 font-medium">
+                          <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
+                          Logged
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {stats.recentBreakdowns.length === 0 && (
+                    <tr>
+                      <td colSpan="4" className="px-6 py-12 text-center text-gray-400">No data found for the selected filters.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default App;
