@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>NPT Analytics Dashboard – AKIJ Resource</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   :root {
@@ -95,7 +95,9 @@
   .badge-amber{background:#fef9ec;color:var(--amber)}
   .badge-blue{background:#eaf4fb;color:var(--blue)}
 
-  /* SECTION TITLES */
+  /* FILTER CASCADED STATE */
+  select.filter-input.cascaded{border-color:var(--accent);background:#fff8f7}
+  select.filter-input.cascaded option:first-child::after{content:' (filtered)'}
   .section-title{font-family:'Inter',sans-serif;font-weight:800;font-size:16px;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:10px}
   .section-title span{width:4px;height:18px;background:var(--accent);border-radius:2px;display:inline-block}
 
@@ -139,23 +141,23 @@
 <div class="filters-bar">
   <div class="filter-group">
     <label class="filter-label">From Date</label>
-    <input type="date" id="fromDate" class="filter-input" value="2025-01-01"/>
+    <input type="date" id="fromDate" class="filter-input" value="2025-01-01" onchange="applyFilters()"/>
   </div>
   <div class="filter-group">
     <label class="filter-label">To Date</label>
-    <input type="date" id="toDate" class="filter-input"/>
+    <input type="date" id="toDate" class="filter-input" onchange="applyFilters()"/>
   </div>
   <div class="filter-group">
     <label class="filter-label">SBU</label>
-    <select id="sbuFilter" class="filter-input"><option value="">All SBUs</option></select>
+    <select id="sbuFilter" class="filter-input" onchange="onSBUChange()"><option value="">All SBUs</option></select>
   </div>
   <div class="filter-group">
     <label class="filter-label">Section</label>
-    <select id="sectionFilter" class="filter-input"><option value="">All Sections</option></select>
+    <select id="sectionFilter" class="filter-input" onchange="onSectionChange()"><option value="">All Sections</option></select>
   </div>
   <div class="filter-group">
     <label class="filter-label">Breakdown Type</label>
-    <select id="typeFilter" class="filter-input"><option value="">All Types</option></select>
+    <select id="typeFilter" class="filter-input" onchange="onTypeChange()"><option value="">All Types</option></select>
   </div>
   <div class="filter-group" style="justify-content:flex-end">
     <label class="filter-label">&nbsp;</label>
@@ -366,27 +368,71 @@ function fmtDate(d) {
   return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
 }
 
-// ─── POPULATE FILTERS ─────────────────────────────────────
+// ─── POPULATE FILTERS (cascading) ─────────────────────────
 function populateFilters(data) {
-  const uniq = (key) => [...new Set(data.map(r=>r[key]).filter(Boolean))].sort();
-  fillSelect('sbuFilter',     uniq('sbu'));
-  fillSelect('sectionFilter', uniq('section'));
-  fillSelect('typeFilter',    uniq('btype'));
-
   // Default toDate to max date in data
   const maxDate = data.reduce((mx,r) => r.date > mx ? r.date : mx, new Date(0));
   document.getElementById('toDate').value = maxDate.toISOString().slice(0,10);
+
+  // Initial full population
+  rebuildCascadingFilters();
 }
 
-function fillSelect(id, vals) {
+/**
+ * Rebuild Section and Breakdown Type options based on current SBU (and Section) selection.
+ * Called on every SBU or Section change.
+ * @param {boolean} resetSection  - clear section selection (true when SBU changes)
+ * @param {boolean} resetType     - clear type selection (true when SBU or section changes)
+ */
+function rebuildCascadingFilters(resetSection = false, resetType = false) {
+  const sbu = document.getElementById('sbuFilter').value;
+  const sec = resetSection ? '' : document.getElementById('sectionFilter').value;
+
+  // Pool: rows matching currently selected SBU (for section options)
+  const sbuPool  = sbu ? allData.filter(r => r.sbu === sbu) : allData;
+  // Pool: rows matching SBU + Section (for type options)
+  const typePool = sec ? sbuPool.filter(r => r.section === sec) : sbuPool;
+
+  const uniq = (arr, key) => [...new Set(arr.map(r=>r[key]).filter(Boolean))].sort();
+
+  fillSelect('sbuFilter',     uniq(allData,  'sbu'),     sbu,  false);
+  fillSelect('sectionFilter', uniq(sbuPool,  'section'), resetSection ? '' : sec,  false);
+  fillSelect('typeFilter',    uniq(typePool, 'btype'),   resetType    ? '' : document.getElementById('typeFilter').value, false);
+
+  // Visual indicator: highlight constrained dropdowns
+  document.getElementById('sectionFilter').classList.toggle('cascaded', !!sbu);
+  const curSec = document.getElementById('sectionFilter').value;
+  document.getElementById('typeFilter').classList.toggle('cascaded', !!(sbu || curSec));
+}
+
+function fillSelect(id, vals, selectedVal, preserveEmpty = true) {
   const sel = document.getElementById(id);
-  const cur = sel.value;
   while(sel.options.length > 1) sel.remove(1);
-  vals.forEach(v => {
-    const opt = new Option(v,v);
-    sel.add(opt);
-  });
-  if (cur) sel.value = cur;
+  vals.forEach(v => sel.add(new Option(v, v)));
+  // Restore selection only if value still exists in new options
+  if (selectedVal && vals.includes(selectedVal)) {
+    sel.value = selectedVal;
+  } else {
+    sel.value = '';
+  }
+}
+
+// ─── CASCADING CHANGE HANDLERS ─────────────────────────────
+function onSBUChange() {
+  // SBU changed → rebuild Section (reset it) and Type (reset it) based on new SBU
+  rebuildCascadingFilters(true, true);
+  applyFilters();
+}
+
+function onSectionChange() {
+  // Section changed → rebuild Type only (reset it); keep SBU intact
+  rebuildCascadingFilters(false, true);
+  applyFilters();
+}
+
+function onTypeChange() {
+  // Type changed → no downstream cascade needed, just filter
+  applyFilters();
 }
 
 // ─── FILTER ──────────────────────────────────────────────
@@ -414,9 +460,9 @@ function resetFilters() {
   document.getElementById('fromDate').value = '2025-01-01';
   const maxDate = allData.reduce((mx,r) => r.date > mx ? r.date : mx, new Date(0));
   document.getElementById('toDate').value = maxDate.toISOString().slice(0,10);
+  // Clear SBU first so cascade rebuilds everything from scratch
   document.getElementById('sbuFilter').value = '';
-  document.getElementById('sectionFilter').value = '';
-  document.getElementById('typeFilter').value = '';
+  rebuildCascadingFilters(true, true);
   applyFilters();
 }
 
@@ -474,7 +520,7 @@ function renderTrendChart(data) {
         {type:'line', label:'Trend', data:nptVals, borderColor:'#e67e22', borderWidth:2.5, pointRadius:4, pointBackgroundColor:'#e67e22', tension:0.4, yAxisID:'y', fill:false}
       ]
     },
-    options:{responsive:true,interaction:{mode:'index'},plugins:{legend:{display:true,position:'top',labels:{font:{family:'DM Sans',size:12},boxWidth:14}}},scales:{y:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.05)'},ticks:{font:{family:'DM Sans',size:11}}},x:{grid:{display:false},ticks:{font:{family:'DM Sans',size:11}}}}}
+    options:{responsive:true,interaction:{mode:'index'},plugins:{legend:{display:true,position:'top',labels:{font:{family:'Inter',size:12},boxWidth:14}}},scales:{y:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.05)'},ticks:{font:{family:'Inter',size:11}}},x:{grid:{display:false},ticks:{font:{family:'Inter',size:11}}}}}
   });
 }
 
@@ -486,7 +532,7 @@ function renderTypeChart(data) {
   charts['type'] = new Chart(document.getElementById('typeChart'), {
     type:'doughnut',
     data:{labels, datasets:[{data:vals, backgroundColor:PALETTE.slice(0,labels.length), borderWidth:2, borderColor:'#fff'}]},
-    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{family:'DM Sans',size:11},boxWidth:12,padding:10}}}}
+    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{family:'Inter',size:11},boxWidth:12,padding:10}}}}
   });
 }
 
@@ -498,7 +544,7 @@ function renderSectionChart(data) {
   charts['section'] = new Chart(document.getElementById('sectionChart'), {
     type:'bar',
     data:{labels,datasets:[{label:'NPT (min)',data:vals,backgroundColor:PALETTE.slice(0,labels.length),borderRadius:4}]},
-    options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.05)'},ticks:{font:{family:'DM Sans',size:11}}},y:{grid:{display:false},ticks:{font:{family:'DM Sans',size:11}}}}}
+    options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.05)'},ticks:{font:{family:'Inter',size:11}}},y:{grid:{display:false},ticks:{font:{family:'Inter',size:11}}}}}
   });
 }
 
@@ -510,7 +556,7 @@ function renderSBUChart(data) {
   charts['sbu'] = new Chart(document.getElementById('sbuChart'), {
     type:'bar',
     data:{labels,datasets:[{label:'Events',data:vals,backgroundColor:PALETTE.slice(2,2+labels.length),borderRadius:5}]},
-    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.05)'},ticks:{font:{family:'DM Sans',size:11}}},x:{grid:{display:false},ticks:{font:{family:'DM Sans',size:11}}}}}
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.05)'},ticks:{font:{family:'Inter',size:11}}},x:{grid:{display:false},ticks:{font:{family:'Inter',size:11}}}}}
   });
 }
 
@@ -522,7 +568,7 @@ function renderCountChart(data) {
   charts['count'] = new Chart(document.getElementById('countChart'), {
     type:'line',
     data:{labels:months.map(monthLabel),datasets:[{label:'Events',data:vals,borderColor:'#8e44ad',backgroundColor:'rgba(142,68,173,0.1)',fill:true,tension:0.4,pointRadius:5,pointBackgroundColor:'#8e44ad',borderWidth:2.5}]},
-    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.05)'},ticks:{font:{family:'DM Sans',size:11}}},x:{grid:{display:false},ticks:{font:{family:'DM Sans',size:11}}}}}
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.05)'},ticks:{font:{family:'Inter',size:11}}},x:{grid:{display:false},ticks:{font:{family:'Inter',size:11}}}}}
   });
 }
 
