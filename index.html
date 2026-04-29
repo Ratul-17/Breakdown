@@ -4,49 +4,81 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NPT Analytics Dashboard</title>
-    <!-- Tailwind CSS for styling -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React and ReactDOM -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- Babel for JSX transformation -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Babel for browser-side JSX transformation -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Recharts for Data Visualization -->
+    <!-- Recharts -->
     <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/lucide-react@latest"></script>
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        .recharts-cartesian-grid-horizontal line, .recharts-cartesian-grid-vertical line {
-            stroke: #f3f4f6;
+        body { 
+            font-family: 'Inter', sans-serif; 
+            margin: 0;
+            padding: 0;
+        }
+        /* Custom scrollbar for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
         }
     </style>
 </head>
-<body class="bg-gray-50">
-    <div id="root"></div>
+<body class="bg-gray-50 text-gray-900">
+    <div id="root">
+        <!-- Initial Loading State while Babel compiles -->
+        <div class="flex h-screen items-center justify-center bg-white">
+            <div class="text-center">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600 mb-4"></div>
+                <p class="text-gray-500 font-medium">Initializing Dashboard...</p>
+            </div>
+        </div>
+    </div>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
         const { 
-            LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell 
+            LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell 
         } = Recharts;
         const { 
-            Filter, Calendar, Settings, Activity, Clock, AlertTriangle, LayoutDashboard, Menu, X, ChevronRight
+            Filter, Activity, Clock, AlertTriangle, LayoutDashboard, Menu, X, ChevronRight, Settings
         } = LucideReact;
 
         // --- CONFIGURATION ---
-        // Replace this with your deployed Google Apps Script Web App URL
-        const API_URL = "https://script.google.com/macros/s/AKfycbzfs4z6RYX26T0q74k4_4H9RkTMF3cvD_4brgz-Jb2m4zuOyHUgP1i7ICBs9PFY0eGK/exec";
+        // 1. Deploy your Google Apps Script as a Web App (Access: Anyone)
+        // 2. Paste the URL here.
+        const API_URL = "https://script.google.com/macros/s/AKfycbx0SRvO2pmoxJFogBXsirkUDa_U84qNczUI_cUW6-6xdhHYs2-NX-bPfgrhmi7rQLUm/exec";
 
         const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+
+        // Mock data for initial preview or if API fails
+        const MOCK_DATA = [
+            { sbu: 'SBU-A', date: '2024-01-10', section: 'Moulding', type: 'Mechanical', name: 'Pump Failure', npt: 120 },
+            { sbu: 'SBU-A', date: '2024-01-15', section: 'Moulding', type: 'Electrical', name: 'Sensor Issue', npt: 45 },
+            { sbu: 'SBU-B', date: '2024-02-05', section: 'Assembly', type: 'Power', name: 'Grid Down', npt: 300 },
+            { sbu: 'SBU-B', date: '2024-02-20', section: 'Assembly', type: 'Mechanical', name: 'Belt Break', npt: 90 },
+            { sbu: 'SBU-A', date: '2024-03-05', section: 'Moulding', type: 'Other', name: 'Material Shortage', npt: 60 }
+        ];
 
         const App = () => {
             const [data, setData] = useState([]);
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
             const [isSidebarOpen, setSidebarOpen] = useState(false);
+            const [isDemo, setIsDemo] = useState(false);
 
             // Filters
             const [filters, setFilters] = useState({
@@ -57,11 +89,15 @@
                 type: 'All'
             });
 
-            // Fetch Data
             useEffect(() => {
                 const fetchData = async () => {
                     try {
+                        if (API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE") {
+                            throw new Error("URL_NOT_SET");
+                        }
+
                         const response = await fetch(API_URL);
+                        if (!response.ok) throw new Error("Network error");
                         const json = await response.json();
                         
                         const formatted = json.map(item => ({
@@ -72,21 +108,25 @@
                         setData(formatted);
                         setLoading(false);
                     } catch (err) {
-                        console.error("Fetch error:", err);
-                        setError("Please deploy the Apps Script and update the API_URL in the code.");
+                        console.warn("API Fetch failed, entering Demo Mode:", err.message);
+                        const demoData = MOCK_DATA.map(item => ({
+                            ...item,
+                            dateObj: new Date(item.date)
+                        }));
+                        setData(demoData);
+                        setIsDemo(true);
                         setLoading(false);
+                        if (err.message === "URL_NOT_SET") {
+                            setError("Enter your Google Apps Script URL in the index.html file to see live data.");
+                        } else {
+                            setError("Could not connect to Google Sheets. Showing sample data instead.");
+                        }
                     }
                 };
 
-                if (API_URL !== "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE") {
-                    fetchData();
-                } else {
-                    setLoading(false);
-                    setError("API URL not configured. Please add your Apps Script URL.");
-                }
+                fetchData();
             }, []);
 
-            // Filter Logic
             const filteredData = useMemo(() => {
                 return data.filter(item => {
                     const dateMatch = (!filters.dateFrom || item.dateObj >= new Date(filters.dateFrom)) &&
@@ -98,7 +138,6 @@
                 });
             }, [data, filters]);
 
-            // Analytics Derived State
             const stats = useMemo(() => {
                 const totalNpt = filteredData.reduce((acc, curr) => acc + curr.npt, 0);
                 const count = filteredData.length;
@@ -133,30 +172,26 @@
 
             const uniqueValues = (key) => ['All', ...new Set(data.map(item => item[key]))];
 
-            if (loading) return (
-                <div className="flex h-screen items-center justify-center bg-gray-50">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                </div>
-            );
+            if (loading) return null;
 
             return (
-                <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row font-sans text-gray-900">
+                <div className="min-h-screen flex flex-col md:flex-row">
                     
-                    {/* Sidebar / Filters (Mobile Drawer) */}
-                    <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-xl transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static transition-transform duration-300 ease-in-out border-r border-gray-100`}>
-                        <div className="p-6">
-                            <div className="flex items-center gap-2 mb-8">
-                                <div className="bg-blue-600 p-2 rounded-lg">
-                                    <Activity className="text-white w-5 h-5" />
+                    {/* Sidebar / Filters */}
+                    <div className={`fixed inset-y-0 left-0 z-50 w-72 bg-white shadow-2xl transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static transition-transform duration-300 ease-in-out border-r border-gray-100`}>
+                        <div className="p-6 h-full flex flex-col">
+                            <div className="flex items-center gap-3 mb-10">
+                                <div className="bg-blue-600 p-2 rounded-xl">
+                                    <Activity className="text-white w-6 h-6" />
                                 </div>
-                                <h1 className="text-xl font-bold tracking-tight">NPT Analytics</h1>
+                                <h1 className="text-xl font-bold tracking-tight text-gray-800">NPT Analytics</h1>
                             </div>
 
-                            <div className="space-y-6">
+                            <div className="space-y-6 flex-1">
                                 <div>
-                                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">SBU</label>
+                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Business Unit (SBU)</label>
                                     <select 
-                                        className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none cursor-pointer"
                                         value={filters.sbu}
                                         onChange={(e) => setFilters({...filters, sbu: e.target.value})}
                                     >
@@ -165,9 +200,9 @@
                                 </div>
 
                                 <div>
-                                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">Section</label>
+                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Section</label>
                                     <select 
-                                        className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none cursor-pointer"
                                         value={filters.section}
                                         onChange={(e) => setFilters({...filters, section: e.target.value})}
                                     >
@@ -176,9 +211,9 @@
                                 </div>
 
                                 <div>
-                                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">Breakdown Type</label>
+                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Breakdown Category</label>
                                     <select 
-                                        className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none cursor-pointer"
                                         value={filters.type}
                                         onChange={(e) => setFilters({...filters, type: e.target.value})}
                                     >
@@ -186,120 +221,169 @@
                                     </select>
                                 </div>
 
-                                <div className="pt-4 border-t border-gray-100">
-                                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">Date Range</label>
-                                    <input 
-                                        type="date" 
-                                        className="w-full mb-2 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
-                                        onChange={(e) => setFilters({...filters, dateFrom: e.target.value})}
-                                    />
-                                    <input 
-                                        type="date" 
-                                        className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
-                                        onChange={(e) => setFilters({...filters, dateTo: e.target.value})}
-                                    />
+                                <div className="pt-6 border-t border-gray-100">
+                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Date Filter</label>
+                                    <div className="space-y-2">
+                                        <input 
+                                            type="date" 
+                                            className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600"
+                                            onChange={(e) => setFilters({...filters, dateFrom: e.target.value})}
+                                        />
+                                        <input 
+                                            type="date" 
+                                            className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600"
+                                            onChange={(e) => setFilters({...filters, dateTo: e.target.value})}
+                                        />
+                                    </div>
                                 </div>
+                            </div>
+                            
+                            <div className="mt-auto pt-6 text-[10px] text-gray-400 text-center uppercase tracking-widest">
+                                Version 1.0.4 • Stable
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto">
-                        <header className="bg-white border-b border-gray-100 p-4 sticky top-0 z-30 flex items-center justify-between">
+                    {/* Main Content */}
+                    <div className="flex-1 h-screen overflow-y-auto">
+                        <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 p-4 sticky top-0 z-30 flex items-center justify-between">
                             <button className="md:hidden p-2 hover:bg-gray-100 rounded-lg" onClick={() => setSidebarOpen(!isSidebarOpen)}>
                                 {isSidebarOpen ? <X /> : <Menu />}
                             </button>
                             <div className="flex items-center gap-4">
                                 <div className="hidden sm:block">
-                                    <p className="text-sm text-gray-500">Overview</p>
-                                    <h2 className="font-semibold capitalize">{filters.section} Performance</h2>
+                                    <h2 className="font-bold text-lg text-gray-800">Operational Dashboard</h2>
+                                    <p className="text-xs text-gray-400 font-medium">{filters.section} • {filters.sbu}</p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2 text-sm font-medium bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full">
-                                <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
-                                Live Data
+                            <div className={`flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-full ${isDemo ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>
+                                <div className={`w-2 h-2 rounded-full ${isDemo ? 'bg-amber-500' : 'bg-blue-600 animate-pulse'}`}></div>
+                                {isDemo ? 'PREVIEW MODE' : 'LIVE CONNECTED'}
                             </div>
                         </header>
 
                         <main className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
                             {error && (
-                                <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-start gap-3">
-                                    <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                                <div className="bg-white border-l-4 border-amber-500 p-5 rounded-2xl shadow-sm flex items-start gap-4">
+                                    <div className="bg-amber-100 p-2 rounded-lg text-amber-600">
+                                        <AlertTriangle className="w-5 h-5" />
+                                    </div>
                                     <div>
-                                        <p className="font-semibold">Setup Required</p>
-                                        <p className="text-sm opacity-90">{error}</p>
+                                        <p className="font-bold text-gray-800">Connection Note</p>
+                                        <p className="text-sm text-gray-500 mt-0.5">{error}</p>
                                     </div>
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
-                                            <Clock className="w-6 h-6" />
+                            {/* Metrics Grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <div className="bg-white p-7 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <div className="p-3 bg-blue-50 rounded-2xl text-blue-600 group-hover:scale-110 transition-transform">
+                                            <Clock className="w-7 h-7" />
                                         </div>
+                                        <span className="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded-lg">Accumulated</span>
                                     </div>
-                                    <p className="text-gray-500 text-sm font-medium">Total NPT Time</p>
-                                    <h3 className="text-3xl font-bold mt-1">{stats.totalNpt.toLocaleString()} <span className="text-sm font-normal text-gray-400">min</span></h3>
+                                    <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">Total NPT Time</p>
+                                    <h3 className="text-4xl font-black mt-2 tracking-tight text-gray-800">
+                                        {stats.totalNpt.toLocaleString()}
+                                        <span className="text-sm font-bold text-gray-300 ml-2">MIN</span>
+                                    </h3>
                                 </div>
                                 
-                                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className="p-3 bg-red-50 rounded-xl text-red-600">
-                                            <AlertTriangle className="w-6 h-6" />
+                                <div className="bg-white p-7 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <div className="p-3 bg-rose-50 rounded-2xl text-rose-600 group-hover:scale-110 transition-transform">
+                                            <AlertTriangle className="w-7 h-7" />
                                         </div>
+                                        <span className="text-xs font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded-lg">Frequency</span>
                                     </div>
-                                    <p className="text-gray-500 text-sm font-medium">Breakdown Frequency</p>
-                                    <h3 className="text-3xl font-bold mt-1">{stats.count} <span className="text-sm font-normal text-gray-400">events</span></h3>
+                                    <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">Total Events</p>
+                                    <h3 className="text-4xl font-black mt-2 tracking-tight text-gray-800">
+                                        {stats.count}
+                                        <span className="text-sm font-bold text-gray-300 ml-2">LOGS</span>
+                                    </h3>
                                 </div>
 
-                                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow sm:col-span-2 lg:col-span-1">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
-                                            <Settings className="w-6 h-6" />
+                                <div className="bg-white p-7 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group sm:col-span-2 lg:col-span-1">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 group-hover:scale-110 transition-transform">
+                                            <Settings className="w-7 h-7" />
                                         </div>
+                                        <span className="text-xs font-bold text-emerald-500 bg-emerald-50 px-2 py-1 rounded-lg">Efficiency</span>
                                     </div>
-                                    <p className="text-gray-500 text-sm font-medium">Avg. Time / Event</p>
-                                    <h3 className="text-3xl font-bold mt-1">
-                                        {stats.count ? (stats.totalNpt / stats.count).toFixed(1) : 0} 
-                                        <span className="text-sm font-normal text-gray-400"> min</span>
+                                    <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">Avg. Time / Event</p>
+                                    <h3 className="text-4xl font-black mt-2 tracking-tight text-gray-800">
+                                        {stats.count ? (stats.totalNpt / stats.count).toFixed(1) : 0}
+                                        <span className="text-sm font-bold text-gray-300 ml-2">MIN</span>
                                     </h3>
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                                        <LayoutDashboard className="w-5 h-5 text-gray-400" />
-                                        Monthly NPT Trend
-                                    </h3>
-                                    <div className="h-64 w-full">
+                                {/* Chart 1 */}
+                                <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
+                                    <div className="flex items-center justify-between mb-10">
+                                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                            <LayoutDashboard className="w-5 h-5 text-blue-500" />
+                                            NPT Monthly Trend
+                                        </h3>
+                                    </div>
+                                    <div className="h-72 w-full">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <LineChart data={stats.trendData}>
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12}} dy={10} />
-                                                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12}} />
-                                                <Tooltip 
-                                                    contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                                <XAxis 
+                                                    dataKey="name" 
+                                                    axisLine={false} 
+                                                    tickLine={false} 
+                                                    tick={{fontSize: 11, fill: '#94a3b8'}} 
+                                                    dy={10} 
                                                 />
-                                                <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={3} dot={{r: 4, fill: '#3b82f6'}} />
+                                                <YAxis 
+                                                    axisLine={false} 
+                                                    tickLine={false} 
+                                                    tick={{fontSize: 11, fill: '#94a3b8'}} 
+                                                />
+                                                <Tooltip 
+                                                    contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}}
+                                                />
+                                                <Line 
+                                                    type="monotone" 
+                                                    dataKey="value" 
+                                                    stroke="#3b82f6" 
+                                                    strokeWidth={4} 
+                                                    dot={{r: 6, fill: '#3b82f6', strokeWidth: 3, stroke: '#fff'}} 
+                                                    activeDot={{r: 8}}
+                                                />
                                             </LineChart>
                                         </ResponsiveContainer>
                                     </div>
                                 </div>
 
-                                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                                        <Filter className="w-5 h-5 text-gray-400" />
-                                        Top Breakdown Types
-                                    </h3>
-                                    <div className="h-64 w-full">
+                                {/* Chart 2 */}
+                                <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
+                                    <div className="flex items-center justify-between mb-10">
+                                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                            <Filter className="w-5 h-5 text-rose-500" />
+                                            Distribution by Type
+                                        </h3>
+                                    </div>
+                                    <div className="h-72 w-full">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <BarChart data={stats.typeData} layout="vertical">
-                                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                                                 <XAxis type="number" hide />
-                                                <YAxis dataKey="name" type="category" width={120} axisLine={false} tickLine={false} tick={{fontSize: 11}} />
+                                                <YAxis 
+                                                    dataKey="name" 
+                                                    type="category" 
+                                                    width={100} 
+                                                    axisLine={false} 
+                                                    tickLine={false} 
+                                                    tick={{fontSize: 10, fontWeight: 600, fill: '#64748b'}} 
+                                                />
                                                 <Tooltip cursor={{fill: '#f8fafc'}} />
-                                                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                                                <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={24}>
                                                     {stats.typeData.map((entry, index) => (
                                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                                     ))}
@@ -310,44 +394,58 @@
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                                <div className="p-6 border-b border-gray-50 flex justify-between items-center">
-                                    <h3 className="text-lg font-bold">Latest Occurrences</h3>
-                                    <button className="text-blue-600 text-sm font-medium flex items-center hover:underline">
-                                        View All <ChevronRight className="w-4 h-4" />
+                            {/* Table */}
+                            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                                <div className="p-8 border-b border-gray-50 flex justify-between items-center">
+                                    <div>
+                                        <h3 className="font-bold text-gray-800">Critical Recent Incidents</h3>
+                                        <p className="text-xs text-gray-400 mt-1">Showing last 5 unique breakdowns</p>
+                                    </div>
+                                    <button className="bg-gray-50 text-gray-600 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1 hover:bg-gray-100 transition-colors">
+                                        Details <ChevronRight className="w-4 h-4" />
                                     </button>
                                 </div>
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-left">
-                                        <thead className="bg-gray-50 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                        <thead className="bg-gray-50/50 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
                                             <tr>
-                                                <th className="px-6 py-4">Breakdown Name</th>
-                                                <th className="px-6 py-4">Category</th>
-                                                <th className="px-6 py-4">Last Date</th>
-                                                <th className="px-6 py-4 text-right">Status</th>
+                                                <th className="px-8 py-5">Incident Title</th>
+                                                <th className="px-8 py-5">Category</th>
+                                                <th className="px-8 py-5">Last Logged</th>
+                                                <th className="px-8 py-5 text-right">Status</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
                                             {stats.recentBreakdowns.map((item, idx) => (
-                                                <tr key={idx} className="hover:bg-gray-50 transition-colors group">
-                                                    <td className="px-6 py-4 font-medium text-gray-700">{item.name}</td>
-                                                    <td className="px-6 py-4">
-                                                        <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">
+                                                <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
+                                                    <td className="px-8 py-6">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                                                            <span className="font-bold text-gray-700">{item.name}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-8 py-6">
+                                                        <span className="bg-gray-100 text-gray-500 px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider">
                                                             {item.type}
                                                         </span>
                                                     </td>
-                                                    <td className="px-6 py-4 text-gray-500 text-sm">{item.date.toLocaleDateString()}</td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        <span className="inline-flex items-center gap-1.5 text-xs text-amber-600 font-medium">
+                                                    <td className="px-8 py-6 text-gray-500 text-sm font-medium">{item.date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric'})}</td>
+                                                    <td className="px-8 py-6 text-right">
+                                                        <span className="inline-flex items-center gap-2 text-[11px] text-amber-600 font-bold bg-amber-50 px-3 py-1 rounded-full">
                                                             <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
-                                                            Logged
+                                                            RECORDED
                                                         </span>
                                                     </td>
                                                 </tr>
                                             ))}
                                             {stats.recentBreakdowns.length === 0 && (
                                                 <tr>
-                                                    <td colSpan="4" className="px-6 py-12 text-center text-gray-400">No data found for the selected filters.</td>
+                                                    <td colSpan="4" className="px-8 py-20 text-center">
+                                                        <div className="flex flex-col items-center gap-3 opacity-30">
+                                                            <Activity className="w-12 h-12" />
+                                                            <p className="font-bold text-gray-400">No matching records found</p>
+                                                        </div>
+                                                    </td>
                                                 </tr>
                                             )}
                                         </tbody>
@@ -360,7 +458,9 @@
             );
         };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
+        // Render the app
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
         root.render(<App />);
     </script>
 </body>
