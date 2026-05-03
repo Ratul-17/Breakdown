@@ -75,9 +75,14 @@
         <option value="ALL">All Types</option>
       </select>
     </div>
-    <button onclick="resetFilters()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-md transition-colors border border-slate-300 w-full sm:w-auto">
-      Reset Filters
-    </button>
+    <div class="flex gap-2 w-full sm:w-auto">
+      <button onclick="updateDashboard()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-md transition-colors border border-blue-600 flex-1 sm:flex-none">
+        Apply
+      </button>
+      <button onclick="resetFilters()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-md transition-colors border border-slate-300 flex-1 sm:flex-none">
+        Reset
+      </button>
+    </div>
   </div>
 
   <!-- Loading State -->
@@ -267,17 +272,20 @@
         document.getElementById('statusText').innerText = "Live";
         document.getElementById('statusDot').classList.replace('bg-amber-400', 'bg-green-500');
 
+        // Set default landing dates
+        document.getElementById('filterFromDate').value = '2026-01-01';
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        document.getElementById('filterToDate').value = `${yyyy}-${mm}-${dd}`;
+
         populateFilters();
         updateDashboard();
 
-        // Attach listeners
+        // Attach listeners (only for cascading SBU; update dashboard only happens on "Apply" button)
         document.getElementById('filterSBU').addEventListener('change', (e) => {
           populateFilters(e.target.value);
-          updateDashboard();
-        });
-
-        ['filterSection', 'filterType', 'filterFromDate', 'filterToDate'].forEach(id => {
-          document.getElementById(id).addEventListener('change', updateDashboard);
         });
 
       } catch (err) {
@@ -319,8 +327,14 @@
 
     function resetFilters() {
       document.getElementById('filterSBU').value = "ALL";
-      document.getElementById('filterFromDate').value = "";
-      document.getElementById('filterToDate').value = "";
+      
+      // Reset to default dates
+      document.getElementById('filterFromDate').value = '2026-01-01';
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      document.getElementById('filterToDate').value = `${yyyy}-${mm}-${dd}`;
       
       populateFilters("ALL"); // Reset cascades
 
@@ -333,16 +347,20 @@
       const sbu = document.getElementById('filterSBU').value;
       const section = document.getElementById('filterSection').value;
       const type = document.getElementById('filterType').value;
-      const fromDate = document.getElementById('filterFromDate').value;
-      const toDate = document.getElementById('filterToDate').value;
+      
+      const fromDateStr = document.getElementById('filterFromDate').value;
+      const toDateStr = document.getElementById('filterToDate').value;
+      const fromDateObj = fromDateStr ? new Date(fromDateStr) : null;
+      const toDateObj = toDateStr ? new Date(toDateStr) : null;
 
       // 1. Filter Data
       const filtered = rawData.filter(d => {
-        const rowDateStr = d.date; // Format is YYYY-MM-DD from GAS
+        const rowDateObj = new Date(d.date);
         
         let dateValid = true;
-        if (fromDate && rowDateStr < fromDate) dateValid = false;
-        if (toDate && rowDateStr > toDate) dateValid = false;
+        // Using robust object date comparison to bypass string format issues
+        if (fromDateObj && !isNaN(rowDateObj) && rowDateObj < fromDateObj) dateValid = false;
+        if (toDateObj && !isNaN(rowDateObj) && rowDateObj > toDateObj) dateValid = false;
 
         return dateValid &&
                (sbu === "ALL" || d.sbu === sbu) &&
@@ -369,7 +387,7 @@
       const sbuCounts = {};
 
       filtered.forEach(row => {
-        // Breakdowns mapping (CRITICAL FIX FOR LAST OCCURRED)
+        // Breakdowns mapping 
         if (!breakdowns[row.name]) {
           breakdowns[row.name] = { 
             name: row.name, type: row.type, section: row.section, 
@@ -501,7 +519,8 @@
       const names = ['Motor Fault', 'Belt Snap', 'Power Dip', 'Valve Jam', 'Sensor Error'];
       
       for(let i=0; i<150; i++) {
-        const date = new Date(2023, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1);
+        // Updated mock generator to output dates around 2026 to work nicely with defaults
+        const date = new Date(2025 + Math.floor(Math.random() * 2), Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1);
         rawData.push({
           sbu: sbus[Math.floor(Math.random()*sbus.length)],
           date: date.toISOString().split('T')[0],
