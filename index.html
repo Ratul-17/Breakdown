@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -216,7 +217,7 @@
 
   <script>
     // --- IMPORTANT: REPLACE THIS URL WITH YOUR PUBLISHED WEB APP URL ---
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyFbYgI27gqeES_Tf1Mx0RH2iInEdwv81m8h3EjnqQd9N6xHJZBYW6LdokRiDvYvxd0/exec"; 
+    const SCRIPT_URL = "YOUR_WEB_APP_URL_HERE"; 
     
     let rawData = [];
     let charts = {};
@@ -279,7 +280,6 @@
           document.getElementById(id).addEventListener('change', updateDashboard);
         });
 
-      } catch (err) {
       } catch (err) {
         document.getElementById('loadingState').innerHTML = `<div class="text-red-500 font-bold p-4 bg-red-50 rounded-md border border-red-200">Error loading data: ${err.message}</div>`;
       }
