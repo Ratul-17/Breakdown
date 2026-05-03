@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -50,6 +49,14 @@
   <!-- Filters -->
   <div class="bg-white border-b border-slate-200 px-6 py-4 flex flex-wrap gap-4 items-end shadow-sm">
     <div class="flex flex-col gap-1 w-full sm:w-auto">
+      <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Date From</label>
+      <input type="date" id="filterFromDate" class="border border-slate-300 rounded-md px-3 py-2 text-sm bg-slate-50 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+    </div>
+    <div class="flex flex-col gap-1 w-full sm:w-auto">
+      <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Date To</label>
+      <input type="date" id="filterToDate" class="border border-slate-300 rounded-md px-3 py-2 text-sm bg-slate-50 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+    </div>
+    <div class="flex flex-col gap-1 w-full sm:w-auto">
       <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider">SBU</label>
       <select id="filterSBU" class="border border-slate-300 rounded-md px-3 py-2 text-sm bg-slate-50 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 min-w-[140px]">
         <option value="ALL">All SBUs</option>
@@ -62,9 +69,9 @@
       </select>
     </div>
     <div class="flex flex-col gap-1 w-full sm:w-auto">
-      <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Month</label>
-      <select id="filterMonth" class="border border-slate-300 rounded-md px-3 py-2 text-sm bg-slate-50 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 min-w-[140px]">
-        <option value="ALL">All Months</option>
+      <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</label>
+      <select id="filterType" class="border border-slate-300 rounded-md px-3 py-2 text-sm bg-slate-50 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 min-w-[140px]">
+        <option value="ALL">All Types</option>
       </select>
     </div>
     <button onclick="resetFilters()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-md transition-colors border border-slate-300 w-full sm:w-auto">
@@ -209,7 +216,7 @@
 
   <script>
     // --- IMPORTANT: REPLACE THIS URL WITH YOUR PUBLISHED WEB APP URL ---
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyr2xvaWcqamyrUDrx9t87yXB4dDHvw5baeYWjW-qZZrKfFMRiLuqjynZzeq7XzLnTe/exec"; 
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyFbYgI27gqeES_Tf1Mx0RH2iInEdwv81m8h3EjnqQd9N6xHJZBYW6LdokRiDvYvxd0/exec"; 
     
     let rawData = [];
     let charts = {};
@@ -263,50 +270,84 @@
         updateDashboard();
 
         // Attach listeners
-        ['filterSBU', 'filterSection', 'filterMonth'].forEach(id => {
+        document.getElementById('filterSBU').addEventListener('change', (e) => {
+          populateFilters(e.target.value);
+          updateDashboard();
+        });
+
+        ['filterSection', 'filterType', 'filterFromDate', 'filterToDate'].forEach(id => {
           document.getElementById(id).addEventListener('change', updateDashboard);
         });
 
+      } catch (err) {
       } catch (err) {
         document.getElementById('loadingState').innerHTML = `<div class="text-red-500 font-bold p-4 bg-red-50 rounded-md border border-red-200">Error loading data: ${err.message}</div>`;
       }
     }
 
-    function populateFilters() {
-      const sbus = [...new Set(rawData.map(d => d.sbu))].filter(Boolean).sort();
-      const sections = [...new Set(rawData.map(d => d.section))].filter(Boolean).sort();
-      
-      // Sort months chronologically
-      const months = [...new Set(rawData.map(d => getMonthYear(d.date)))].filter(m => m !== "Unknown");
-      months.sort((a, b) => new Date(a) - new Date(b));
+    function populateFilters(cascadingSBU = "ALL") {
+      const currentSection = document.getElementById('filterSection').value;
+      const currentType = document.getElementById('filterType').value;
 
-      const populate = (id, options) => {
-        const sel = document.getElementById(id);
-        options.forEach(opt => sel.innerHTML += `<option value="${opt}">${opt}</option>`);
-      };
+      let sourceData = rawData;
 
-      populate('filterSBU', sbus);
-      populate('filterSection', sections);
-      populate('filterMonth', months);
+      // Always populate SBU with all options (only once)
+      const sbuSelect = document.getElementById('filterSBU');
+      if (sbuSelect.options.length <= 1) {
+        const sbus = [...new Set(rawData.map(d => d.sbu))].filter(Boolean).sort();
+        sbus.forEach(opt => sbuSelect.innerHTML += `<option value="${opt}">${opt}</option>`);
+      }
+
+      // Filter source data for Section and Type cascading
+      if (cascadingSBU !== "ALL") {
+        sourceData = rawData.filter(d => d.sbu === cascadingSBU);
+      }
+
+      const sections = [...new Set(sourceData.map(d => d.section))].filter(Boolean).sort();
+      const types = [...new Set(sourceData.map(d => d.type))].filter(Boolean).sort();
+
+      const sectionSelect = document.getElementById('filterSection');
+      sectionSelect.innerHTML = '<option value="ALL">All Sections</option>';
+      sections.forEach(opt => sectionSelect.innerHTML += `<option value="${opt}">${opt}</option>`);
+      if (sections.includes(currentSection)) sectionSelect.value = currentSection;
+
+      const typeSelect = document.getElementById('filterType');
+      typeSelect.innerHTML = '<option value="ALL">All Types</option>';
+      types.forEach(opt => typeSelect.innerHTML += `<option value="${opt}">${opt}</option>`);
+      if (types.includes(currentType)) typeSelect.value = currentType;
     }
 
     function resetFilters() {
       document.getElementById('filterSBU').value = "ALL";
+      document.getElementById('filterFromDate').value = "";
+      document.getElementById('filterToDate').value = "";
+      
+      populateFilters("ALL"); // Reset cascades
+
       document.getElementById('filterSection').value = "ALL";
-      document.getElementById('filterMonth').value = "ALL";
+      document.getElementById('filterType').value = "ALL";
       updateDashboard();
     }
 
     function updateDashboard() {
       const sbu = document.getElementById('filterSBU').value;
       const section = document.getElementById('filterSection').value;
-      const month = document.getElementById('filterMonth').value;
+      const type = document.getElementById('filterType').value;
+      const fromDate = document.getElementById('filterFromDate').value;
+      const toDate = document.getElementById('filterToDate').value;
 
       // 1. Filter Data
       const filtered = rawData.filter(d => {
-        return (sbu === "ALL" || d.sbu === sbu) &&
+        const rowDateStr = d.date; // Format is YYYY-MM-DD from GAS
+        
+        let dateValid = true;
+        if (fromDate && rowDateStr < fromDate) dateValid = false;
+        if (toDate && rowDateStr > toDate) dateValid = false;
+
+        return dateValid &&
+               (sbu === "ALL" || d.sbu === sbu) &&
                (section === "ALL" || d.section === section) &&
-               (month === "ALL" || getMonthYear(d.date) === month);
+               (type === "ALL" || d.type === type);
       });
 
       // 2. Compute KPIs
