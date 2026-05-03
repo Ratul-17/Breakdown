@@ -318,16 +318,19 @@ function parseCSV(text) {
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = parseCSVLine(lines[i]);
-    if (!cols[0] || cols[0].trim() === '') continue; // skip empty rows
-    const sbu   = clean(cols[0]);
+    if (!cols.some(c => c && c.trim() !== '')) continue; // skip empty rows
+    const sbu = clean(cols[0]).toUpperCase().trim();
     const dateStr = clean(cols[1]);
-    const section = clean(cols[2]);
-    const btype   = clean(cols[3]);
-    const bname   = clean(cols[4]);
-    const reason  = clean(cols[5]);
-    const npt     = parseFloat(clean(cols[6])) || 0;
+    const section = clean(cols[2]).trim();
+    const btype   = clean(cols[3]).trim();
+    const bname   = clean(cols[4]).trim();
+    const reason  = clean(cols[5]).trim();
+    const npt = Number(clean(cols[6]).replace(/[^0-9.-]/g, '')) || 0;
     const date    = parseDate(dateStr);
-    if (!date) continue;
+    if (!date) {
+  console.warn("Invalid date row:", cols);
+  continue;
+}
     rows.push({sbu, date, section, btype, bname, reason, npt});
   }
   return rows;
@@ -350,16 +353,24 @@ function clean(s) { return (s||'').replace(/^"|"$/g,'').trim(); }
 
 function parseDate(s) {
   if (!s) return null;
-  // Handle M/D/YYYY or MM/DD/YYYY or YYYY-MM-DD
-  let d;
-  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
-    const [m,day,y] = s.split('/');
-    d = new Date(+y, +m-1, +day);
-  } else if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-    d = new Date(s.slice(0,10));
-  } else {
-    d = new Date(s);
+
+  // Try standard parsing first
+  let d = new Date(s);
+
+  // If invalid, try DD/MM/YYYY manually
+  if (isNaN(d.getTime())) {
+    const parts = s.split(/[\/\-]/);
+    if (parts.length === 3) {
+      let [a, b, c] = parts;
+
+      // Detect format
+      if (c.length === 4) {
+        // assume DD/MM/YYYY
+        d = new Date(c, a - 1, b);
+      }
+    }
   }
+
   return isNaN(d.getTime()) ? null : d;
 }
 
@@ -434,7 +445,9 @@ function onTypeChange() {
   // Type changed → no downstream cascade needed, just filter
   applyFilters();
 }
-
+function normalize(s) {
+  return clean(s).toUpperCase().trim();
+}
 // ─── FILTER ──────────────────────────────────────────────
 function applyFilters() {
   const from  = document.getElementById('fromDate').value;
