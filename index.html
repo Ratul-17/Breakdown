@@ -300,7 +300,7 @@ let charts = {};
 async function fetchSheetData() {
   // GViz query: fetch all rows from the sheet, skip header rows by using WHERE clause or tq
   // We start from row 7 (row 6 is header), use GViz CSV export
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_TAB)}&range=A6:G`;
+  const url = `https://script.google.com/macros/s/AKfycbzyhRt2glgiLE9t7gpxVqFRA6tBauG2psi-82ThJnjrK8-hgDw68LlmgzXWkDJLRMZX/exec`;
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
