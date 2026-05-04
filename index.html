@@ -416,7 +416,7 @@
       const activeSbus = new Set(filtered.map(d => d.sbu)).size;
       
       document.getElementById('kpiEvents').innerText = totalEvents.toLocaleString();
-      document.getElementById('kpiMins').innerText = totalNpt.toLocaleString();
+      document.getElementById('kpiMins').innerText = parseFloat(totalNpt.toFixed(2)).toLocaleString();
       document.getElementById('kpiAvg').innerText = totalEvents ? Math.round(totalNpt / totalEvents) : 0;
       document.getElementById('kpiSBUs').innerText = activeSbus;
 
@@ -474,7 +474,7 @@
           </td>
           <td class="py-3 px-4 border-b border-slate-100 text-slate-600">${item.section || 'N/A'}</td>
           <td class="py-3 px-4 border-b border-slate-100 text-right font-bold text-slate-700">${item.freq}</td>
-          <td class="py-3 px-4 border-b border-slate-100 text-right font-bold text-red-500">${item.npt}</td>
+          <td class="py-3 px-4 border-b border-slate-100 text-right font-bold text-red-500">${parseFloat(item.npt.toFixed(2))}</td>
           <td class="py-3 px-4 border-b border-slate-100 text-slate-500 text-sm">${formatDate(item.lastOccurred)}</td>
         </tr>
       `).join('');
@@ -497,7 +497,7 @@
           <td class="py-3 px-4 border-b border-slate-100 text-xs font-semibold text-slate-500">${row.type}</td>
           <td class="py-3 px-4 border-b border-slate-100 font-semibold text-slate-800">${row.name}</td>
           <td class="py-3 px-4 border-b border-slate-100 text-slate-500 text-xs max-w-xs truncate" title="${row.reason}">${row.reason || '-'}</td>
-          <td class="py-3 px-4 border-b border-slate-100 text-right font-bold ${row.npt > 60 ? 'text-red-500' : 'text-slate-700'}">${row.npt}</td>
+          <td class="py-3 px-4 border-b border-slate-100 text-right font-bold ${row.npt > 60 ? 'text-red-500' : 'text-slate-700'}">${parseFloat(row.npt.toFixed(2))}</td>
         </tr>
       `).join('');
       document.getElementById('recentTable').innerHTML = recentHtml || '<tr><td colspan="7" class="text-center py-4 text-slate-400">No events found.</td></tr>';
