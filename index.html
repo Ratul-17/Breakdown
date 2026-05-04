@@ -241,19 +241,47 @@
       ]
     };
 
-    // Format Date helper
+    // --- ROBUST DATE PARSING HELPERS ---
+    // Standardizes ANY date string into purely YYYY-MM-DD format strictly for filtering comparisons.
+    function getYYYYMMDD(dateStr) {
+      if (!dateStr) return "";
+      dateStr = String(dateStr).trim();
+      
+      // If already YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+      
+      // Attempt native Javascript parsing FIRST (Handles MM/DD/YYYY beautifully)
+      const dObj = new Date(dateStr);
+      if (!isNaN(dObj)) {
+        return dObj.getFullYear() + "-" + 
+               String(dObj.getMonth() + 1).padStart(2, '0') + "-" + 
+               String(dObj.getDate()).padStart(2, '0');
+      }
+      
+      // If native JS fails (happens with valid DD/MM/YYYY dates), process manually
+      if (dateStr.includes('/')) {
+         const parts = dateStr.split('/');
+         if (parts.length === 3) {
+             return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+         }
+      }
+      return "";
+    }
+
     function formatDate(dateString) {
-      if (!dateString) return "N/A";
-      const d = new Date(dateString);
-      if (isNaN(d)) return dateString;
-      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      const ymd = getYYYYMMDD(dateString);
+      if (!ymd) return "N/A";
+      const [y, m, d] = ymd.split('-');
+      const dateObj = new Date(y, m - 1, d);
+      return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     }
     
     function getMonthYear(dateString) {
-      if (!dateString) return "Unknown";
-      const d = new Date(dateString);
-      if (isNaN(d)) return "Unknown";
-      return d.toLocaleString('default', { month: 'short', year: 'numeric' });
+      const ymd = getYYYYMMDD(dateString);
+      if (!ymd) return "Unknown";
+      const [y, m, d] = ymd.split('-');
+      const dateObj = new Date(y, m - 1, d);
+      return dateObj.toLocaleString('default', { month: 'short', year: 'numeric' });
     }
 
     async function init() {
@@ -263,7 +291,14 @@
           generateMockData();
         } else {
           const res = await fetch(SCRIPT_URL);
-          rawData = await res.json();
+          const rawResponseData = await res.json();
+          
+          // CRITICAL FIX: Exclude header rows pushed into the payload by =FILTER() formulas
+          rawData = rawResponseData.filter(d => 
+            d.sbu && 
+            String(d.sbu).toUpperCase() !== 'SBU' && 
+            d.name !== 'Breakdown Name'
+          );
         }
         
         document.getElementById('loadingState').classList.add('hidden');
@@ -283,7 +318,7 @@
         populateFilters();
         updateDashboard();
 
-        // Attach listeners (only for cascading SBU; update dashboard only happens on "Apply" button)
+        // Attach listeners
         document.getElementById('filterSBU').addEventListener('change', (e) => {
           populateFilters(e.target.value);
         });
@@ -350,17 +385,21 @@
       
       const fromDateStr = document.getElementById('filterFromDate').value;
       const toDateStr = document.getElementById('filterToDate').value;
-      const fromDateObj = fromDateStr ? new Date(fromDateStr) : null;
-      const toDateObj = toDateStr ? new Date(toDateStr) : null;
 
       // 1. Filter Data
       const filtered = rawData.filter(d => {
-        const rowDateObj = new Date(d.date);
-        
         let dateValid = true;
-        // Using robust object date comparison to bypass string format issues
-        if (fromDateObj && !isNaN(rowDateObj) && rowDateObj < fromDateObj) dateValid = false;
-        if (toDateObj && !isNaN(rowDateObj) && rowDateObj > toDateObj) dateValid = false;
+        const rowDateStr = getYYYYMMDD(d.date);
+
+        // Standardized String comparisons bypass Date object timezone bugs entirely
+        if (fromDateStr || toDateStr) {
+            if (!rowDateStr) {
+                dateValid = false; // Exclude invalid dates if date filter applies
+            } else {
+                if (fromDateStr && rowDateStr < fromDateStr) dateValid = false;
+                if (toDateStr && rowDateStr > toDateStr) dateValid = false;
+            }
+        }
 
         return dateValid &&
                (sbu === "ALL" || d.sbu === sbu) &&
@@ -391,15 +430,15 @@
         if (!breakdowns[row.name]) {
           breakdowns[row.name] = { 
             name: row.name, type: row.type, section: row.section, 
-            freq: 0, npt: 0, lastOccurred: new Date(0) 
+            freq: 0, npt: 0, lastOccurred: "" 
           };
         }
         breakdowns[row.name].freq++;
         breakdowns[row.name].npt += row.npt;
         
-        const rowDate = new Date(row.date);
-        if (!isNaN(rowDate) && rowDate > breakdowns[row.name].lastOccurred) {
-          breakdowns[row.name].lastOccurred = rowDate;
+        const rowDateStr = getYYYYMMDD(row.date);
+        if (rowDateStr && rowDateStr > breakdowns[row.name].lastOccurred) {
+          breakdowns[row.name].lastOccurred = rowDateStr;
         }
 
         // Charts data prep
@@ -438,8 +477,15 @@
       `).join('');
       document.getElementById('topTable').innerHTML = topHtml || '<tr><td colspan="7" class="text-center py-4 text-slate-400">No data available for selected filters.</td></tr>';
 
-      // 5. Render Recent Events
-      const recentList = [...filtered].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 15);
+      // 5. Render Recent Events (Safe Date String Sort)
+      const recentList = [...filtered].sort((a, b) => {
+        const d1 = getYYYYMMDD(a.date);
+        const d2 = getYYYYMMDD(b.date);
+        if (d1 < d2) return 1;
+        if (d1 > d2) return -1;
+        return 0;
+      }).slice(0, 15);
+      
       const recentHtml = recentList.map(row => `
         <tr class="hover:bg-slate-50 transition-colors">
           <td class="py-3 px-4 border-b border-slate-100 text-slate-600 whitespace-nowrap">${formatDate(row.date)}</td>
