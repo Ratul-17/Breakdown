@@ -222,7 +222,7 @@
 
   <script>
     // --- IMPORTANT: REPLACE THIS URL WITH YOUR PUBLISHED WEB APP URL ---
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwox5xHQcBfFAd0vFMun19Eik0-qiS9XwXzkLZc587YlzToZvZZQeYLsJRUrOJ_UT8-/execc"; 
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvpvbfhcMipDEKFMHOq5aG1hon2783KAyrxzG5dyHhN6pRtMXUMM1cx71UFbr2R_Qb/exec"; 
     
     let rawData = [];
     let charts = {};
@@ -290,12 +290,12 @@
           console.warn("Using mock data. Please replace SCRIPT_URL with your Web App URL.");
           generateMockData();
         } else {
-          // CRITICAL FIX 1: Add timestamp cache-buster so the browser ALWAYS gets fresh data
+          // Add timestamp cache-buster so the browser ALWAYS gets fresh data
           const cacheBuster = SCRIPT_URL.includes('?') ? '&t=' : '?t=';
           const res = await fetch(SCRIPT_URL + cacheBuster + new Date().getTime());
           const rawResponseData = await res.json();
           
-          // CRITICAL FIX 2: Ignore Google Sheet #N/A, #REF! errors AND headers
+          // Belt-and-suspenders: Ensure frontend also drops any bad rows
           rawData = rawResponseData.filter(d => 
             d.sbu && 
             String(d.sbu).toUpperCase() !== 'SBU' && 
