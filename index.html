@@ -290,13 +290,16 @@
           console.warn("Using mock data. Please replace SCRIPT_URL with your Web App URL.");
           generateMockData();
         } else {
-          const res = await fetch(SCRIPT_URL);
+          // CRITICAL FIX 1: Add timestamp cache-buster so the browser ALWAYS gets fresh data
+          const cacheBuster = SCRIPT_URL.includes('?') ? '&t=' : '?t=';
+          const res = await fetch(SCRIPT_URL + cacheBuster + new Date().getTime());
           const rawResponseData = await res.json();
           
-          // CRITICAL FIX: Exclude header rows pushed into the payload by =FILTER() formulas
+          // CRITICAL FIX 2: Ignore Google Sheet #N/A, #REF! errors AND headers
           rawData = rawResponseData.filter(d => 
             d.sbu && 
             String(d.sbu).toUpperCase() !== 'SBU' && 
+            !String(d.sbu).startsWith('#') && 
             d.name !== 'Breakdown Name'
           );
         }
